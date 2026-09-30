@@ -1,0 +1,5 @@
+# TLS certificate is issued automatically for $DOMAIN. WebSocket upgrades pass through reverse_proxy as is.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8787
+}

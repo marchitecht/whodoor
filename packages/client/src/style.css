@@ -1,0 +1,110 @@
+/* Layout: one 16:9 stage with a hard ink shadow on a cool paper ground; touch pad below on phones.
+   Single deliberate look (paper, ink, electric-blue door, player colours), same on any OS theme. */
+:root {
+  --paper: #E8E9EE; --ground: #D5D7E0; --ink: #15161B; --mute: #8B8E9E; --accent: #3148FF; --white: #FFFFFF;
+  --ad: #FFE35C; --ad2: #FF2E93;
+  --display: "Rubik Mono One", "Arial Black", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box }
+html, body { height: 100%; margin: 0 }
+body {
+  background: var(--ground); color: var(--ink); font-family: var(--mono);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding-inline: 16px; padding-block: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color: transparent;
+}
+#stage {
+  position: relative; width: min(100%, calc((100dvh - 150px) * 16 / 9)); aspect-ratio: 16 / 9; max-width: 100%;
+  container-type: inline-size; border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+  background: var(--paper); overflow: hidden;
+}
+canvas { display: block; width: 100%; height: 100%; touch-action: none }
+[hidden] { display: none !important }
+.ov { position: absolute; inset: 0 }
+
+.screen { background: var(--paper); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 4cqw 7cqw 10cqw; gap: 1.8cqw }
+.screen h1 { font-family: var(--display); font-weight: 400; font-size: 5cqw; line-height: 1.02; margin: 0; text-wrap: balance; max-width: 18ch }
+.screen h1 em { font-style: normal; color: var(--accent) }
+.screen p { margin: 0; font-size: 1.8cqw; line-height: 1.45; max-width: 58ch }
+.eyebrow { font-size: 1.6cqw !important; text-transform: uppercase; letter-spacing: .08em; color: var(--mute) }
+.eyebrow b { color: var(--ink); font-family: var(--display); font-weight: 400; letter-spacing: .12em; font-size: 2.6cqw }
+.keys { color: var(--mute); font-size: 1.5cqw !important }
+kbd { border: 1.5px solid var(--ink); border-bottom-width: 3px; padding: .05em .45em; border-radius: 3px; font-family: var(--mono); font-weight: 600; color: var(--ink); background: var(--white) }
+
+.form { display: flex; flex-direction: column; gap: 1cqw; width: min(100%, 60cqw) }
+.form label { font-size: 1.4cqw; text-transform: uppercase; letter-spacing: .08em; color: var(--mute) }
+.form input, .share input {
+  font: 600 2cqw var(--mono); color: var(--ink); background: var(--white); border: 3px solid var(--ink);
+  padding: .8cqw 1.2cqw; outline: none; min-width: 0;
+}
+.form input:focus-visible, .share input:focus-visible { box-shadow: 4px 4px 0 var(--accent) }
+.actions { display: flex; align-items: center; gap: 2cqw; flex-wrap: wrap }
+.code-wrap { font-size: 1.6cqw; color: var(--mute); display: flex; align-items: center; gap: .8cqw }
+.code-wrap input { width: 11cqw; text-transform: uppercase; font-size: 1.8cqw; padding: .6cqw .8cqw; border-width: 2px }
+
+.btn { font-family: var(--display); font-size: 2.1cqw; background: var(--accent); color: var(--white); border: 3px solid var(--ink); padding: 1cqw 2.6cqw; box-shadow: 4px 4px 0 var(--ink); cursor: pointer }
+.btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink) }
+.btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink) }
+.btn-sm { font: 600 1.5cqw var(--mono); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: .7cqw 1.2cqw; cursor: pointer; box-shadow: 3px 3px 0 var(--ink) }
+.btn-sm:hover { background: var(--white) }
+button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px }
+
+.share { display: flex; gap: 1cqw; width: min(100%, 64cqw) }
+.share input { flex: 1; font-size: 1.5cqw; border-width: 2px }
+
+.plist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8cqw 3cqw; width: min(100%, 64cqw) }
+.plist li { display: flex; align-items: center; gap: 1cqw; font-size: 1.8cqw; font-weight: 600; min-width: 0 }
+.plist .sw { width: 2cqw; height: 2cqw; flex: none; border: 2px solid var(--ink) }
+.plist .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.plist .tag { font-size: 1.2cqw; color: var(--mute); font-weight: 400; text-transform: uppercase; letter-spacing: .06em }
+.plist.score { grid-template-columns: minmax(0, 1fr) }
+.plist.score li { justify-content: space-between; border-bottom: 2px solid var(--ink); padding-block: .5cqw }
+.plist.score .who { display: flex; align-items: center; gap: 1cqw; min-width: 0 }
+.plist.score .pts { font-family: var(--display); font-weight: 400; font-variant-numeric: tabular-nums }
+.plist.score .dth { font-size: 1.3cqw; color: var(--mute); font-weight: 400 }
+
+.strip { position: absolute; left: 0; right: 0; bottom: 0; height: 13%; background: var(--ink) }
+.sq { position: absolute; bottom: 13%; left: 8%; width: 2.7cqw; height: 2.7cqw; background: #E5322D }
+.dr { position: absolute; bottom: 13%; right: 9%; width: 3.5cqw; height: 5.4cqw; background: var(--accent); box-shadow: 0 -0.4cqw 0 0 var(--ink) }
+
+.banner {
+  position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); background: var(--white); border: 3px solid var(--ink);
+  box-shadow: 6px 6px 0 var(--ink); padding: 1.6cqw 3cqw; font-family: var(--display); font-size: 3cqw; display: flex; align-items: center; gap: 1.4cqw; white-space: nowrap;
+}
+.banner .sw { width: 3cqw; height: 3cqw; border: 3px solid var(--ink) }
+
+/* garish ad */
+.ad { position: absolute; left: 62.5%; top: 30%; width: 42%; min-height: 60%; transform: translateX(-50%); background: var(--ad); border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4cqw; padding: 3cqw 2cqw; text-align: center; transition: opacity .3s }
+.ad.ghost { opacity: .22; pointer-events: none }
+.ad-k { font-family: var(--display); font-size: 3.2cqw; color: var(--ad2); animation: blink .5s steps(2) infinite }
+.ad-t { font-size: 1.8cqw; font-weight: 600; line-height: 1.35 }
+.ad-go { font-family: var(--display); font-size: 1.7cqw; background: var(--ad2); color: var(--white); border: 3px solid var(--ink); padding: .9cqw 1.8cqw; cursor: pointer; animation: wob .5s ease-in-out infinite alternate }
+.adx { position: absolute; width: 3.4cqw; height: 3.4cqw; font-size: 2.4cqw; line-height: 1; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); cursor: pointer; padding: 0; transition: top .12s, left .12s }
+@keyframes blink { 50% { opacity: .25 } }
+@keyframes wob { from { transform: rotate(-3deg) scale(1) } to { transform: rotate(3deg) scale(1.06) } }
+
+.dialog { position: absolute; left: 50%; top: 10%; transform: translateX(-50%); width: 92%; display: flex; flex-direction: column; align-items: center; gap: 1cqw }
+.dialog .cap { font-size: 1.4cqw; color: var(--mute); text-transform: uppercase; letter-spacing: .08em }
+.dialog .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 1cqw }
+.dialog button { font: 600 1.6cqw var(--mono); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: .8cqw 1.4cqw; cursor: pointer; box-shadow: 3px 3px 0 var(--ink) }
+.dialog button:hover:not(:disabled) { background: var(--white) }
+.dialog button:disabled { opacity: .4; cursor: default }
+.skip { position: absolute; right: 2%; top: 9%; font: 600 1.5cqw var(--mono); background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: .6cqw 1.2cqw; cursor: pointer; box-shadow: 3px 3px 0 var(--ink) }
+.skip:hover { background: var(--white) }
+
+.hint { font-size: 13px; color: var(--mute); text-align: center }
+.pad { display: none; gap: 10px; width: min(100%, 560px) }
+.pad button { flex: 1; height: 64px; font-family: var(--display); font-size: 20px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); touch-action: none; user-select: none; -webkit-user-select: none }
+.pad button.j { flex: 1.6; background: var(--accent); color: var(--white); font-size: 15px }
+.pad button.on { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink) }
+@media (pointer: coarse) {
+  .pad { display: flex }
+  .hint { display: none }
+  #stage { width: min(100%, calc((100dvh - 200px) * 16 / 9)) }
+}
+@media (max-width: 640px) {
+  .plist { grid-template-columns: minmax(0, 1fr) }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important } }

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Кто первый в дверь</title>
+  <meta name="description" content="Платформер на скорость для компании: 21 уровень, одна дверь, рассказчик врёт.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Rubik+Mono+One&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="cv" aria-label="Игровое поле"></canvas>
+
+    <div id="ad" class="ad" hidden>
+      <button id="adx" class="adx" aria-label="Закрыть рекламу">×</button>
+      <div class="ad-k">ПОЗДРАВЛЯЕМ!</div>
+      <div id="adt" class="ad-t"></div>
+      <button id="adgo" class="ad-go">ЗАБРАТЬ ПРИЗ</button>
+    </div>
+
+    <div id="dialog" class="dialog" hidden>
+      <div class="cap">Что сказать своему квадрату?</div>
+      <div id="opts" class="row"></div>
+    </div>
+
+    <button id="skip" class="skip" hidden></button>
+    <div id="banner" class="banner" hidden></div>
+
+    <!-- start: name + create/join -->
+    <div id="scr-start" class="ov screen">
+      <h1>Кто первый в <em>дверь</em></h1>
+      <p>21 уровень. Одна дверь. Кто вошёл первым, забирает очко. Рассказчику не верь.</p>
+      <form id="f-join" class="form">
+        <label for="in-name">Как тебя зовут</label>
+        <input id="in-name" maxlength="16" autocomplete="nickname" placeholder="Например, Марат" required>
+        <div class="actions">
+          <button id="btn-join" class="btn" type="submit">Создать комнату</button>
+          <span id="code-wrap" class="code-wrap">или код <input id="in-code" maxlength="6" autocomplete="off" placeholder="ABCD"></span>
+        </div>
+      </form>
+      <p class="keys"><kbd>←</kbd> <kbd>→</kbd> идти · <kbd>пробел</kbd> прыжок · на телефоне появятся кнопки</p>
+      <div class="strip"></div><div class="sq"></div><div class="dr"></div>
+    </div>
+
+    <!-- lobby -->
+    <div id="scr-lobby" class="ov screen" hidden>
+      <p class="eyebrow">Комната <b id="lb-code"></b></p>
+      <div class="share">
+        <input id="lb-link" readonly aria-label="Ссылка на комнату">
+        <button id="btn-copy" class="btn-sm" type="button">Скопировать</button>
+      </div>
+      <ul id="lb-list" class="plist"></ul>
+      <button id="btn-start" class="btn" hidden>Начать</button>
+      <p id="lb-wait" class="keys" hidden></p>
+      <div class="strip"></div>
+    </div>
+
+    <!-- end -->
+    <div id="scr-end" class="ov screen" hidden>
+      <h1 id="end-title"></h1>
+      <ul id="end-list" class="plist score"></ul>
+      <button id="btn-again" class="btn" hidden>Ещё раз</button>
+      <p id="end-wait" class="keys" hidden></p>
+      <div class="strip"></div>
+    </div>
+
+    <div id="scr-lost" class="ov screen" hidden>
+      <h1>Связь <em>потеряна</em></h1>
+      <p id="lost-msg">Сервер не отвечает. Обнови страницу, чтобы вернуться в комнату.</p>
+      <button class="btn" onclick="location.reload()">Обновить</button>
+      <div class="strip"></div>
+    </div>
+  </div>
+
+  <div class="hint"><kbd>←</kbd> <kbd>→</kbd> или <kbd>A</kbd> <kbd>D</kbd> — идти · <kbd>пробел</kbd> — прыжок</div>
+  <div class="pad" id="pad">
+    <button data-k="left" aria-label="Влево">◀</button>
+    <button data-k="right" aria-label="Вправо">▶</button>
+    <button data-k="jump" class="j">ПРЫЖОК</button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

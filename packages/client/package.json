@@ -1,0 +1,15 @@
+{
+  "name": "@whodoor/client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@whodoor/shared": "workspace:*",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  }
+}
