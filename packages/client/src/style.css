@@ -51,6 +51,8 @@ kbd { border: 1.5px solid var(--ink); border-bottom-width: 3px; padding: .05em .
 .btn-sm:hover { background: var(--white) }
 button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px }
 
+.bots { display: flex; align-items: center; gap: 1cqw }
+.btn-sm:disabled { opacity: .4; cursor: default }
 .share { display: flex; gap: 1cqw; width: min(100%, 64cqw) }
 .share input { flex: 1; font-size: 1.5cqw; border-width: 2px }
 

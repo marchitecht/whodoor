@@ -116,12 +116,16 @@ function screens() {
       const li = document.createElement('li');
       const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name;
       li.append(swatch(p.color), nm);
-      const tags = [p.id === myId && 'ты', p.id === host && 'хост'].filter(Boolean).join(' · ');
+      const tags = [p.id === myId && 'ты', p.id === host && 'хост', p.bot && 'бот'].filter(Boolean).join(' · ');
       if (tags) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = tags; li.append(t); }
       ul.append(li);
     }
+    const bots = players.filter(p => p.bot).length;
     $('btn-start').hidden = !isHost;
     $('btn-start').textContent = players.length > 1 ? `Начать (${players.length})` : 'Начать одному';
+    $('lb-bots').hidden = !isHost;
+    $<HTMLButtonElement>('btn-bot-add').disabled = players.length >= 8;
+    $<HTMLButtonElement>('btn-bot-del').disabled = bots === 0;
     $('lb-wait').hidden = isHost;
     $('lb-wait').textContent = `Ждём, пока ${hostName} начнёт игру. Пока можно позвать ещё людей по ссылке.`;
   }
@@ -167,6 +171,8 @@ $('btn-copy').addEventListener('click', async () => {
 });
 $('btn-start').addEventListener('click', () => { initAudio(); send({ t: 'start' }); });
 $('btn-again').addEventListener('click', () => send({ t: 'restart' }));
+$('btn-bot-add').addEventListener('click', () => send({ t: 'bot', add: true }));
+$('btn-bot-del').addEventListener('click', () => send({ t: 'bot', add: false }));
 $('skip').addEventListener('click', e => { (e.currentTarget as HTMLElement).blur(); sfx('click'); send({ t: 'skip' }); });
 
 /* ---------------- per-level overlays ---------------- */
