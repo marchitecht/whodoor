@@ -1,5 +1,8 @@
-# TLS certificate is issued automatically for $DOMAIN. WebSocket upgrades pass through reverse_proxy as is.
+# Standalone setup. With an existing Caddy, copy the two lines inside the site block into your own config
+# (and use localhost:8787 instead of app:8787 if that Caddy is not in this compose project).
 {$DOMAIN} {
-	encode zstd gzip
-	reverse_proxy app:8787
+	redir /games/whodoor /games/whodoor/
+	handle_path /games/whodoor/* {
+		reverse_proxy app:8787
+	}
 }

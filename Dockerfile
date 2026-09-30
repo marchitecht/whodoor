@@ -8,6 +8,8 @@ COPY packages/server/package.json packages/server/
 COPY packages/client/package.json packages/client/
 RUN pnpm install --frozen-lockfile
 COPY packages packages
+ARG BASE_PATH=/games/whodoor/
+ENV BASE_PATH=$BASE_PATH
 RUN pnpm build && pnpm --filter @whodoor/server deploy --prod --legacy /out
 
 # ---- runtime: server bundle + client static + prod node_modules ----

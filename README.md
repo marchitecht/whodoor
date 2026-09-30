@@ -38,7 +38,7 @@ pnpm dev             # сервер на :8787, клиент на http://localho
 
 ```bash
 pnpm bots 4                                   # 4 бота в комнате BOTS на localhost
-pnpm bots 2 wss://door.marchitecht.tech/ws 60  # 2 бота против прода на 60 секунд
+pnpm bots 2 wss://marchitecht.tech/games/whodoor/ws 60  # 2 бота против прода на 60 секунд
 BOT_ROOM=ABCD pnpm bots 2                     # подселить ботов в свою комнату
 ```
 
@@ -49,39 +49,61 @@ pnpm typecheck
 pnpm build && PORT=8787 pnpm start            # всё на http://localhost:8787
 ```
 
-## Деплой на VM в Яндекс Облаке
+## Деплой: marchitecht.tech/games/whodoor/
 
-Нужны: VM, публичный статический IP, домен. Cloud Functions не подходят — WebSocket-соединения живут долго.
+Игра живёт по пути на основном домене, отдельный домен не нужен. Нужна машина с Docker, куда смотрит домен (или любая VM,
+на которую домен можно направить). Cloud Functions не подходят: WebSocket-соединения живут долго.
 
-1. **VM.** Compute Cloud → Создать ВМ: Ubuntu 24.04, 2 vCPU (50%), 2 ГБ RAM, 20 ГБ диска.
-   Сеть: публичный адрес — **статический**. Добавь свой SSH-ключ.
-   Для 10–20 одновременных комнат этого хватает с запасом.
-2. **Порты.** В группе безопасности открой входящие TCP 22, 80, 443 и UDP 443.
-3. **DNS.** Создай A-запись `door.marchitecht.tech` → IP машины. Дождись, пока `dig +short door.marchitecht.tech` вернёт этот IP.
-   Caddy выпускает сертификат Let's Encrypt при старте, и без DNS он не получится.
-4. **Docker** на машине:
-   ```bash
-   curl -fsSL https://get.docker.com | sudo sh
-   sudo usermod -aG docker $USER && newgrp docker
-   ```
-5. **Код и запуск:**
+Контейнер `app` слушает только `127.0.0.1:8787`. Снаружи его открывает Caddy: срезает префикс `/games/whodoor`
+и проксирует всё остальное, включая WebSocket. Клиент собран с этим путём (`BASE_PATH` в `.env`).
+
+### Если на машине уже есть Caddy для marchitecht.tech
+
+1. Код и запуск приложения:
    ```bash
    git clone https://github.com/marchitecht/whodoor.git && cd whodoor
-   cp .env.example .env          # поменяй DOMAIN, если нужен другой
+   cp .env.example .env
    docker compose up -d --build
+   curl http://127.0.0.1:8787/health          # {"ok":true,...}
    ```
-6. **Проверка:**
-   ```bash
-   curl https://door.marchitecht.tech/health    # {"ok":true,"rooms":0,"players":0}
-   docker compose logs -f app
+2. В блок сайта в своём Caddyfile добавь:
+   ```caddy
+   marchitecht.tech {
+   	redir /games/whodoor /games/whodoor/
+   	handle_path /games/whodoor/* {
+   		reverse_proxy localhost:8787
+   	}
+   	# ...всё, что там уже было
+   }
    ```
-   Затем открой домен в браузере, создай комнату и скинь ссылку друзьям.
+   Если твой Caddy сам крутится в Docker, `localhost` будет его контейнером: либо подключи его к сети этого compose-проекта
+   и пиши `app:8787`, либо используй `host.docker.internal:8787` (на Linux нужен `extra_hosts: ["host.docker.internal:host-gateway"]`).
+3. `caddy reload` (или `docker compose restart` своего Caddy) и открой https://marchitecht.tech/games/whodoor/.
 
-Обновление после изменений:
+Для nginx то же самое: `location /games/whodoor/ { proxy_pass http://127.0.0.1:8787/; proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 1h; }`.
+
+### Если сайта на машине ещё нет
+
+В проекте есть свой Caddy, он выпустит сертификат сам:
 
 ```bash
-git pull && docker compose up -d --build
+cp .env.example .env                          # DOMAIN=marchitecht.tech
+docker compose --profile standalone up -d --build
 ```
+
+Домен должен уже смотреть на эту машину, порты 80 и 443 открыты. Этот Caddy отвечает только на `/games/whodoor/`,
+остальные пути сайта он не обслуживает.
+
+### Проверка и обновление
+
+```bash
+curl https://marchitecht.tech/games/whodoor/health
+docker compose logs -f app
+git pull && docker compose up -d --build     # после изменений
+```
+
+Другой путь: поменяй `BASE_PATH` в `.env` и путь в конфиге Caddy, затем пересобери (`docker compose up -d --build`).
 
 ## Как добавить уровень
 

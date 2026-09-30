@@ -11,6 +11,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const cv = $<HTMLCanvasElement>('cv');
 const ctx = setupCanvas(cv);
 const STEP = 1 / 60, INTERP_MS = 100;
+const BASE = import.meta.env.BASE_URL; // '/' locally, '/games/whodoor/' in production
 
 /* ---------------- state ---------------- */
 let ws: WebSocket | null = null;
@@ -35,7 +36,7 @@ function send(m: C2S) { if (ws?.readyState === 1) ws.send(JSON.stringify(m)); }
 
 function connect(name: string, room: string) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws = new WebSocket(`${proto}://${location.host}${BASE}ws`);
   ws.onopen = () => send({ t: 'join', name, room });
   ws.onmessage = e => onMsg(JSON.parse(e.data) as S2C);
   ws.onclose = () => showLost();
@@ -109,7 +110,7 @@ function screens() {
   const hostName = players.find(p => p.id === host)?.name ?? 'хост';
   if (phase === 'lobby') {
     $('lb-code').textContent = code;
-    $<HTMLInputElement>('lb-link').value = `${location.origin}/?r=${code}`;
+    $<HTMLInputElement>('lb-link').value = `${location.origin}${BASE}?r=${code}`;
     const ul = $('lb-list'); ul.replaceChildren();
     for (const p of players) {
       const li = document.createElement('li');

@@ -1,19 +1,27 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        - BASE_PATH=${BASE_PATH:-/games/whodoor/}
     restart: unless-stopped
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    # only reachable from the host: your existing Caddy/nginx proxies /games/whodoor/ here
+    ports:
+      - "127.0.0.1:8787:8787"
 
+  # Only if nothing on this VM serves the domain yet: `docker compose --profile standalone up -d`
   caddy:
     image: caddy:2-alpine
+    profiles: ["standalone"]
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     environment:
-      - DOMAIN=${DOMAIN:-door.marchitecht.tech}
+      - DOMAIN=${DOMAIN:-marchitecht.tech}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
