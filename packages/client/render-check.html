@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>render check</title>
+<style>body{margin:0;display:grid;grid-template-columns:repeat(4,480px);gap:4px;background:#999}canvas{width:480px;height:270px}</style>
+<script type="module">
+import { LEVELS, initLevel, updateWorld, drawDoor } from '@whodoor/shared';
+import { draw } from './src/render.ts';
+// each level after a few seconds with two players walking in, so hazards are mid-action
+const secs = { ice: 1.6, slabs: 2.2, ball: 3.2, collapse: 3, credits: 8, rhythm: 5, lifts: 8.5, pend: 2 };
+for (const [i, L] of LEVELS.entries()) {
+  const cv = document.createElement('canvas'); cv.width = 960; cv.height = 540; document.body.append(cv);
+  let w = initLevel(i);
+  if (L.draw) w = drawDoor([[600, 400], [600, 470], [640, 470], [640, 400], [600, 400]])(w);
+  const n = Math.round((secs[L.id] ?? 3) * 60);
+  for (let k = 0; k < n; k++) w = updateWorld(1 / 60, [
+    { id: 'A', x: 60 + k * 3, y: 444, w: 26, h: 26, face: 1, g: true, alive: true },
+    { id: 'B', x: 40 + k * 2, y: 444, w: 26, h: 26, face: 1, g: true, alive: true }])(w);
+  draw(cv.getContext('2d'), { w, T: n / 60, avatars: [
+    { id: 'A', x: Math.min(900, 60 + n * 3), y: 444, w: 26, h: 26, face: 1, color: '#E5322D', name: 'Марат', me: true, tired: false, alive: true }],
+    bubbles: [], narr: w.say, scores: [{ color: '#E5322D', score: 1, me: true }], flash: 0, stroke: null });
+}
+document.title = 'done';
+</script>

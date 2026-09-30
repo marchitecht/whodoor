@@ -8,7 +8,8 @@
     "build": "pnpm --filter @whodoor/client build && pnpm --filter @whodoor/server build",
     "start": "node packages/server/dist/index.js",
     "typecheck": "pnpm -r typecheck",
-    "bots": "pnpm --filter @whodoor/server bots"
+    "bots": "pnpm --filter @whodoor/server bots",
+    "test": "pnpm --filter @whodoor/shared test"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

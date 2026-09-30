@@ -1,141 +1,93 @@
-// Geometry, world state and player physics shared by server and client.
+// Geometry, the immutable world, and the optics everything else is built from.
+import { pipe } from 'fp-ts/lib/function.js';
+import * as O from 'fp-ts/lib/Option.js';
+import * as RA from 'fp-ts/lib/ReadonlyArray.js';
+import * as L from 'monocle-ts/lib/Lens.js';
+import * as Op from 'monocle-ts/lib/Optional.js';
 
 export const W = 960, H = 540, FLOOR = 470;
 export const SPEED = 250, JUMP = 560, GRAV = 1500, PS = 26;
-/** IBM Plex Mono advance at 600 weight / 20px: 0.6em. Server has no canvas, so text widths use this. */
+/** IBM Plex Mono advance at 600 weight / 20px: 0.6em. The server has no canvas, so text widths use this. */
 export const CHAR_W = 12;
 
-export interface Rect { x: number; y: number; w: number; h: number }
-
+export interface Rect { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
 export interface Solid extends Rect {
-  oneway?: boolean;
-  floor?: boolean;
-  text?: string;
-  color?: 'mute' | 'ink' | 'accent';
-  active?: boolean;
-  prevY?: number;
-  seam?: boolean;
-  tile?: boolean;
-  st?: number; tt?: number; vy?: number;
+  readonly oneway?: boolean;
+  readonly floor?: boolean;
+  readonly text?: string;
+  readonly color?: 'mute' | 'ink' | 'accent';
+  readonly active?: boolean;
+  readonly prevY?: number;
+  readonly seam?: boolean;
+  readonly st?: number;
 }
+export interface Door extends Rect { readonly moving?: boolean; readonly flip?: boolean; readonly drawn?: boolean }
+export interface PlayerState { readonly ok?: boolean; readonly lock?: number }
+/** Every component keeps its state in a named slot; `kind` tells the renderer how to draw it. */
+export interface Slot { readonly kind: string }
 
-export interface Door extends Rect { moving?: boolean; flip?: boolean; drawn?: boolean }
-
-export interface PlayerState { ok?: boolean; lock?: number }
-
-/** Everything the server sends about a level. Plain data only: it goes over the wire as JSON. */
 export interface World {
-  lvl: number;
-  t: number;
-  solids: Solid[];
-  spikes: Rect[];
-  door: Door | null;
-  gdir: 1 | -1;
-  spawn: [number, number];
-  // level-specific state; `any` on purpose, each level owns its shape
-  s: any;
-  say: string;
-  sayN: number;
-  pl: Record<string, PlayerState>;
+  readonly lvl: number;
+  readonly t: number;
+  /** RNG state: narrator picks stay pure and replayable */
+  readonly seed: number;
+  /** static solids; components add dynamic ones through Behavior.solids */
+  readonly solids: ReadonlyArray<Solid>;
+  readonly spikes: ReadonlyArray<Rect>;
+  readonly door: Door | null;
+  readonly gdir: 1 | -1;
+  readonly spawn: readonly [number, number];
+  readonly c: Readonly<Record<string, Slot>>;
+  readonly say: string;
+  readonly sayN: number;
+  readonly pl: Readonly<Record<string, PlayerState>>;
 }
 
-/** What the world needs to know about a player to run triggers. */
-export interface PV extends Rect { id: string; face: number; g: boolean; alive: boolean }
-
-export interface Input { left: boolean; right: boolean; jump: boolean; leftP: boolean; rightP: boolean; jumpP: boolean }
+/** What the world knows about a player when running triggers. */
+export interface PV extends Rect { readonly id: string; readonly face: number; readonly g: boolean; readonly alive: boolean }
+export interface Body extends Rect { readonly vx: number; readonly vy: number; readonly face: number; readonly g: boolean }
+export interface Input { readonly left: boolean; readonly right: boolean; readonly jump: boolean; readonly leftP: boolean; readonly rightP: boolean; readonly jumpP: boolean }
 export const NONE: Input = { left: false, right: false, jump: false, leftP: false, rightP: false, jumpP: false };
 
-export interface Body extends Rect { vx: number; vy: number; face: number; g: boolean }
-
-export const box = (x: number, y: number, w: number, h: number, o: Partial<Solid> = {}): Solid => ({ x, y, w, h, ...o });
-export const mkDoor = (x: number, y?: number): Door => ({ x, y: y ?? FLOOR - 52, w: 34, h: 52 });
+/* ---------- geometry ---------- */
+export const box = (x: number, y: number, w: number, h: number, o: Omit<Solid, keyof Rect> = {}): Solid => ({ x, y, w, h, ...o });
+export const mkDoor = (x: number, y: number = FLOOR - 52): Door => ({ x, y, w: 34, h: 52 });
 export const spk = (x: number, w: number): Rect => ({ x, y: FLOOR - 22, w, h: 22 });
-export const ov = (a: Rect, b: Rect, s = 0) => a.x + s < b.x + b.w && a.x + a.w - s > b.x && a.y + s < b.y + b.h && a.y + a.h - s > b.y;
-export const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
+export const floorBox = (x = 0, w = W): Solid => box(x, FLOOR, w, H - FLOOR, { floor: true });
 export const textPlat = (text: string, x: number, y: number, color: Solid['color'] = 'ink'): Solid =>
   box(x, y, text.length * CHAR_W, 20, { oneway: true, text, color });
-
-export function hitC(p: Rect, cx: number, cy: number, r: number) {
-  const nx = Math.max(p.x, Math.min(cx, p.x + p.w)), ny = Math.max(p.y, Math.min(cy, p.y + p.h));
-  return (nx - cx) ** 2 + (ny - cy) ** 2 < (r - 4) ** 2;
+export const ov = (a: Rect, b: Rect, s = 0) => a.x + s < b.x + b.w && a.x + a.w - s > b.x && a.y + s < b.y + b.h && a.y + a.h - s > b.y;
+export const cx = (r: Rect) => r.x + r.w / 2;
+export function hitC(p: Rect, x: number, y: number, r: number) {
+  const nx = Math.max(p.x, Math.min(x, p.x + p.w)), ny = Math.max(p.y, Math.min(y, p.y + p.h));
+  return (nx - x) ** 2 + (ny - y) ** 2 < (r - 4) ** 2;
 }
+/** The first solid a box stands on (normal gravity only). */
+export const standingOn = (p: Rect, gdir: number) => (ss: ReadonlyArray<Solid>): O.Option<Solid> =>
+  gdir < 0 ? O.none : pipe(ss, RA.findFirst(s => Math.abs(p.y + p.h - s.y) < 2.5 && p.x + p.w > s.x && p.x < s.x + s.w));
 
-export function say(w: World, text: string) { w.say = text; w.sayN++; }
+export const newWorld = (lvl: number): World => ({
+  lvl, t: 0, seed: (0x9E3779B9 ^ (lvl * 2654435761)) >>> 0,
+  solids: [floorBox()], spikes: [], door: null, gdir: 1, spawn: [60, FLOOR - PS],
+  c: {}, say: '', sayN: 0, pl: {},
+});
 
-export function newWorld(lvl: number): World {
-  return {
-    lvl, t: 0, solids: [box(0, FLOOR, W, H - FLOOR, { floor: true })], spikes: [], door: null,
-    gdir: 1, spawn: [60, FLOOR - PS], s: {}, say: '', sayN: 0, pl: {},
-  };
-}
-
-/* ---------- breakable floor tiles: st 0 solid, 1 shaking, 2 falling, 3 gone ---------- */
-export function tileFloor(w: World, ts: number, seam: boolean) {
-  w.solids = w.solids.filter(s => !s.floor);
-  w.s.tiles = [] as Solid[];
-  for (let x = 0; x < W; x += ts)
-    w.s.tiles.push(box(x, FLOOR, Math.min(ts, W - x), H - FLOOR, { floor: true, tile: true, st: 0, tt: 0, vy: 0, seam }));
-}
-export function dropTile(t: Solid | undefined, delay = 0) { if (!t || t.st) return; t.st = 1; t.tt = delay; }
-/** regrow: seconds a fallen tile stays gone before coming back (0 = never). */
-export function tilesUpdate(w: World, dt: number, regrow = 0) {
-  for (const t of w.s.tiles as Solid[]) {
-    if (t.st === 1 && (t.tt! -= dt) <= 0) { t.st = 2; t.vy = 0; }
-    else if (t.st === 2) { t.vy! += 1800 * dt; t.y += t.vy! * dt; if (t.y > H + 60) { t.st = 3; t.tt = regrow; } }
-    else if (t.st === 3 && regrow && (t.tt! -= dt) <= 0) Object.assign(t, { st: 0, tt: 0, vy: 0, y: FLOOR });
-  }
-}
-export function restoreTiles(w: World) { for (const t of w.s.tiles as Solid[]) Object.assign(t, { st: 0, tt: 0, vy: 0, y: FLOOR }); }
-
-/** Static solids plus whatever the level keeps in its own state (tiles, lifts, credit lines, slabs, obstacles). */
-export function allSolids(w: World): Solid[] {
-  const a = w.solids.slice(), s = w.s;
-  if (s.tiles) for (const t of s.tiles as Solid[]) if (t.st! < 2) a.push(t);
-  if (s.lf) for (const l of s.lf as Solid[]) if (l.active !== false) a.push(l);
-  if (s.lines) for (const l of s.lines as Solid[]) if (l.active) a.push(l);
-  if (s.slabs) a.push(...(s.slabs as Solid[]));
-  if (s.obst) a.push(...(s.obst as Solid[]));
-  return a;
-}
-
-/** The solid a player stands on, if any (normal gravity only). */
-export function standingOn(w: World, p: Rect): Solid | null {
-  if (w.gdir < 0) return null;
-  for (const s of allSolids(w)) if (Math.abs(p.y + p.h - s.y) < 2.5 && p.x + p.w > s.x && p.x < s.x + s.w) return s;
-  return null;
-}
-
-/**
- * One physics step for one player. `others` are other players' boxes: you can stand on their heads.
- * Returns true if the player jumped this step.
- */
-export function stepPlayer(b: Body, i: Input, w: World, others: Rect[], dt: number): boolean {
-  const gd = w.gdir;
-  const ax = (i.right ? 1 : 0) - (i.left ? 1 : 0);
-  b.vx = ax * SPEED; if (ax) b.face = ax;
-  let jumped = false;
-  if (i.jumpP && b.g) { b.vy = -JUMP * gd; jumped = true; }
-  b.vy = Math.max(-900, Math.min(900, b.vy + GRAV * gd * dt));
-  const solids = allSolids(w);
-  b.x += b.vx * dt;
-  for (const s of solids) {
-    if (s.oneway || !ov(b, s)) continue;
-    if (b.vx > 0) b.x = s.x - b.w; else if (b.vx < 0) b.x = s.x + s.w;
-  }
-  b.x = Math.max(0, Math.min(W - b.w, b.x));
-  const prevB = b.y + b.h;
-  b.y += b.vy * dt; b.g = false;
-  for (const s of solids) {
-    if (!ov(b, s)) continue;
-    if (s.oneway) {
-      if (gd > 0 && b.vy >= 0 && prevB <= (s.prevY ?? s.y) + 6) { b.y = s.y - b.h; b.vy = 0; b.g = true; }
-      continue;
-    }
-    if (b.vy > 0) { b.y = s.y - b.h; if (gd > 0) b.g = true; } else { b.y = s.y + s.h; if (gd < 0) b.g = true; }
-    b.vy = 0;
-  }
-  if (gd > 0) for (const o of others) {
-    if (ov(b, o) && b.vy >= 0 && prevB <= o.y + 6) { b.y = o.y - b.h; b.vy = 0; b.g = true; }
-  }
-  return jumped;
-}
+/* ---------- optics ---------- */
+/** Point-free setter that works for any optic with `set` (Lens, Optional). */
+export const setTo = <A>(a: A) => <S>(o: { readonly set: (a: A) => (s: S) => S }): ((s: S) => S) => o.set(a);
+const world = L.id<World>();
+export const _t = pipe(world, L.prop('t'));
+export const _solids = pipe(world, L.prop('solids'));
+export const _spikes = pipe(world, L.prop('spikes'));
+export const _spawn = pipe(world, L.prop('spawn'));
+export const _gdir = pipe(world, L.prop('gdir'));
+/** The door may not exist (drawn later, broken, fallen): an Optional, not a Lens. */
+export const _door: Op.Optional<World, Door> = pipe(world, L.prop('door'), L.fromNullable);
+export const _doorX = pipe(_door, Op.prop('x'));
+export const _doorY = pipe(_door, Op.prop('y'));
+/** Slot presence as an Option — used to create a component's state. */
+export const _slotAt = (key: string) => pipe(world, L.prop('c'), L.atKey(key));
+/** A component's own state. The key is the component's, so the cast is local to it. */
+export const _slot = <S extends Slot>(key: string): Op.Optional<World, S> =>
+  pipe(world, L.prop('c'), L.key(key)) as unknown as Op.Optional<World, S>;
+export const _player = (pid: string) => pipe(world, L.prop('pl'), L.atKey(pid));

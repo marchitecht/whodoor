@@ -2,8 +2,9 @@
 // Each bot runs the same client loop as the browser (local physics + world between snapshots)
 // with a dumb "hold right, jump a lot" brain, and logs who wins which level.
 import WebSocket from 'ws';
+import * as O from 'fp-ts/lib/Option.js';
 import {
-  LEVELS, PS, NONE, W, initLevel, updateWorld, mapInput, checkPlayer, stepPlayer,
+  LEVELS, PS, NONE, W, updateWorld, mapInput, checkPlayer, stepPlayer,
   type World, type Body, type PV, type S2C, type Input,
 } from '@whodoor/shared';
 
@@ -18,11 +19,11 @@ const stats = { levels: new Map<string, string>(), deaths: 0, errors: 0, snaps: 
 function bot(n: number) {
   const ws = new WebSocket(URL);
   let id = '', w: World | null = null, doorSent = -1, frame = 0, host = '', lvlFrames = 0;
-  const b: Body = { x: 60, y: 444, w: PS, h: PS, vx: 0, vy: 0, face: 1, g: false };
+  let b: Body = { x: 60, y: 444, w: PS, h: PS, vx: 0, vy: 0, face: 1, g: false };
   const others = new Map<string, PV>();
   let prev = { ...NONE };
   const send = (m: object) => ws.readyState === 1 && ws.send(JSON.stringify(m));
-  const respawn = () => { if (!w) return; [b.x, b.y] = w.spawn; b.x += n * 6; b.vx = b.vy = 0; };
+  const respawn = () => { if (!w) return; b = { ...b, x: w.spawn[0] + n * 6, y: w.spawn[1], vx: 0, vy: 0 }; };
 
   ws.on('open', () => send({ t: 'join', name: `Бот ${n + 1}`, room: ROOM }));
   ws.on('error', e => { stats.errors++; console.error('ws error', e.message); });
@@ -56,22 +57,21 @@ function bot(n: number) {
     if (!w || !id) return;
     frame++; lvlFrames++;
     const ps: PV[] = [{ id, ...b, alive: true }, ...others.values()];
-    updateWorld(w, DT, ps);
+    w = updateWorld(DT, ps)(w);
     // brain: hold right; jump every ~0.6s with some per-bot phase; wait level: do nothing
     const L = LEVELS[w.lvl];
-    const tx = w.door ? w.door.x + w.door.w / 2 : w.s.hole ? 898 : W;
+    const tx = w.door ? w.door.x + w.door.w / 2 : (w.c.last as { hole?: boolean } | undefined)?.hole ? 898 : W;
     const dx = tx - (b.x + b.w / 2);
     const raw: Input = { left: dx < -8, right: dx > 8, jump: (frame + n * 7) % 36 < 2, leftP: false, rightP: false, jumpP: false };
-    if (L.id === 'wait' && !w.s.done) raw.right = raw.jump = false;
-    raw.jumpP = raw.jump && !prev.jump; raw.rightP = raw.right && !prev.right;
-    prev = raw;
-    const i = mapInput(w, raw, id);
-    stepPlayer(b, i, w, [...others.values()].filter(o => o.alive), DT);
+    const waiting = L.id === 'wait' && !(w.c.walker as { done?: boolean } | undefined)?.done;
+    const inp: Input = waiting ? { ...NONE } : { ...raw, jumpP: raw.jump && !prev.jump, rightP: raw.right && !prev.right, leftP: raw.left && !prev.left };
+    prev = inp;
+    b = stepPlayer(mapInput(w, inp, id), w, [...others.values()].filter(o => o.alive), DT)(b)[1];
     // stuck for 20s: jump to the door so the rest of the flow still gets exercised
-    if (lvlFrames > 60 * 20 && w.door && n === 0 && doorSent !== w.lvl) { stats.teleports.add(L.id); b.x = w.door.x; b.y = w.door.y + w.door.h - b.h; }
+    if (lvlFrames > 60 * 20 && w.door && n === 0 && doorSent !== w.lvl) { stats.teleports.add(L.id); b = { ...b, x: w.door.x, y: w.door.y + w.door.h - b.h }; }
     const r = checkPlayer(w, b);
-    if (r?.die) { stats.deaths++; send({ t: 'die', m: r.die }); respawn(); }
-    else if (r?.win && doorSent !== w.lvl) { doorSent = w.lvl; send({ t: 'door', lvl: w.lvl }); }
+    if (O.isSome(r) && r.value.tag === 'die') { stats.deaths++; send({ t: 'die', m: r.value.msg }); respawn(); }
+    else if (O.isSome(r) && doorSent !== w.lvl) { doorSent = w.lvl; send({ t: 'door', lvl: w.lvl }); }
     if (frame % 2 === 0) send({ t: 'st', x: b.x, y: b.y, f: b.face, g: b.g ? 1 : 0, a: 1 });
   }, 1000 / 60);
 

@@ -1,9 +1,11 @@
 import './style.css';
 import {
   PS, NONE, LEVELS, TIRED_OPTS, WIN_PAUSE_MS,
-  updateWorld, mapInput, checkPlayer, stepPlayer,
+  updateWorld, mapInput, checkPlayer, stepPlayer, getSlot,
   type World, type Body, type PV, type Input, type S2C, type C2S, type LobbyPlayer, type Phase,
 } from '@whodoor/shared';
+import { pipe } from 'fp-ts/lib/function.js';
+import * as O from 'fp-ts/lib/Option.js';
 import { setupCanvas, draw, type Avatar } from './render.ts';
 import { initAudio, sfx } from './audio.ts';
 
@@ -18,7 +20,7 @@ let ws: WebSocket | null = null;
 let myId = '', code = '', host = '', phase: Phase = 'lobby';
 let players: LobbyPlayer[] = [];
 let w: World | null = null;
-const me: Body = { x: 60, y: 444, w: PS, h: PS, vx: 0, vy: 0, face: 1, g: false };
+let me: Body = { x: 60, y: 444, w: PS, h: PS, vx: 0, vy: 0, face: 1, g: false };
 let doorSent = -1, flash = 0, T = 0, sendAcc = 0, lastBeat = -1;
 let narr = { text: '', n: -1, t: 0 };
 let stroke: { x: number; y: number }[] | null = null;
@@ -91,7 +93,7 @@ function takeNarr() { if (w && w.sayN !== narr.n) narr = { text: w.say, n: w.say
 function myIndex() { return Math.max(0, players.findIndex(p => p.id === myId)); }
 function respawn() {
   if (!w) return;
-  me.x = w.spawn[0] + myIndex() * 6; me.y = w.spawn[1]; me.vx = me.vy = 0; me.g = false;
+  me = { ...me, x: w.spawn[0] + myIndex() * 6, y: w.spawn[1], vx: 0, vy: 0, g: false };
 }
 
 /* ---------------- screens ---------------- */
@@ -222,7 +224,9 @@ const held = { left: false, right: false, jump: false };
 let prev = { ...held };
 const KM: Record<string, keyof typeof held> = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'jump', ArrowUp: 'jump', KeyW: 'jump' };
 const playing = () => phase === 'play' && !!w && !!myId;
-function poke() { if (playing() && LEVELS[w!.lvl].poke && !w!.s.done) send({ t: 'poke' }); }
+/** Only the patience level listens for presses, and only until the door has arrived. */
+const waitingForPatience = (x: World) => pipe(getSlot<{ kind: string; done: boolean }>('walker')(x), O.exists(s => !s.done));
+function poke() { if (playing() && waitingForPatience(w!)) send({ t: 'poke' }); }
 function clearHeld() { held.left = held.right = held.jump = false; document.querySelectorAll('.pad button').forEach(b => b.classList.remove('on')); }
 
 addEventListener('keydown', e => {
@@ -277,18 +281,23 @@ function tick(dt: number) {
   if (flash > 0) flash -= dt;
   narr.t += dt;
   if (!w || phase !== 'play') { readInput(); return; }
-  const L = LEVELS[w.lvl];
   const os = latestOthers();
-  updateWorld(w, dt, [{ id: myId, ...me, alive: true }, ...os]);
-  if (L.id === 'rhythm') { if (lastBeat >= 0 && w.s.beat !== lastBeat) sfx(w.s.beat % 2 ? 'tick' : 'tock'); lastBeat = w.s.beat; }
-  const i = mapInput(w, readInput(), myId);
-  if (stepPlayer(me, i, w, os.filter(o => o.alive), dt)) sfx('jump');
-  const r = checkPlayer(w, me);
-  if (r?.die) {
-    send({ t: 'die', m: r.die }); sfx('die'); flash = .3;
-    bubbles.set(myId, { text: r.die, until: performance.now() + 1600 });
-    respawn();
-  } else if (r?.win && doorSent !== w.lvl) { doorSent = w.lvl; send({ t: 'door', lvl: w.lvl }); }
+  w = updateWorld(dt, [{ id: myId, ...me, alive: true }, ...os])(w);
+  pipe(getSlot<{ kind: string; beat: number }>('beat')(w), O.map(s => {
+    if (lastBeat >= 0 && s.beat !== lastBeat) sfx(s.beat % 2 ? 'tick' : 'tock');
+    lastBeat = s.beat;
+  }));
+  const [jumped, next] = stepPlayer(mapInput(w, readInput(), myId), w, os.filter(o => o.alive), dt)(me);
+  me = next;
+  if (jumped) sfx('jump');
+  const lvl = w.lvl;
+  pipe(checkPlayer(w, me), O.map(o => {
+    if (o.tag === 'die') {
+      send({ t: 'die', m: o.msg }); sfx('die'); flash = .3;
+      bubbles.set(myId, { text: o.msg, until: performance.now() + 1600 });
+      respawn();
+    } else if (doorSent !== lvl) { doorSent = lvl; send({ t: 'door', lvl }); }
+  }));
   if ((sendAcc += dt) >= 1 / 30) { sendAcc = 0; send({ t: 'st', x: me.x, y: me.y, f: me.face, g: me.g ? 1 : 0, a: 1 }); }
 }
 

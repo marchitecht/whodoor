@@ -1,4 +1,4 @@
-import { W, H, FLOOR, LEVELS, TOTAL, allSolids, type World, type Solid, type Door, type Rect } from '@whodoor/shared';
+import { W, H, FLOOR, LEVELS, TOTAL, solidsOf, type World, type Solid, type Door, type Rect } from '@whodoor/shared';
 
 export const COL = { paper: '#E8E9EE', ink: '#15161B', mute: '#8B8E9E', accent: '#3148FF', faint: '#CFD1DA', white: '#FFFFFF' };
 const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace', DISP = '"Rubik Mono One", "Arial Black", sans-serif';
@@ -53,60 +53,63 @@ function drawDoor(c: CanvasRenderingContext2D, d: Door, T: number) {
   }
 }
 
-/* per-level extras, drawn behind solids (back) or above the floor (top) */
-const back: Record<string, (c: CanvasRenderingContext2D, w: World, T: number) => void> = {
-  saw(c, w) { const s = w.s; drawSaw(c, s.a.x, FLOOR, 32, s.rot); if (s.b.on) drawSaw(c, s.b.x, FLOOR, 32, s.go ? -s.rot * 1.6 : s.rot * .15); },
-  ice(c, w) {
-    c.fillStyle = COL.ink;
-    for (const q of [...w.s.ic, w.s.last]) {
-      if (q.st === 3) continue; const j = q.st === 1 ? (Math.random() - .5) * 4 : 0;
-      c.beginPath(); c.moveTo(q.x + j, q.y); c.lineTo(q.x + 22 + j, q.y); c.lineTo(q.x + 11 + j, q.y + 34); c.fill();
-    }
-  },
-  pend(c, w, T) {
+/* Per-component drawing: every slot in the world is drawn by the painter for its `kind`,
+   so a new component only needs a painter, never a level check. */
+type Paint = (c: CanvasRenderingContext2D, s: any, w: World, T: number) => void;
+const back: Record<string, Paint> = {
+  saw(c, s, _w, T) { if (s.on) drawSaw(c, s.x, FLOOR, s.r, s.v === 0 ? T * 1.3 : T * 9 * Math.sign(s.v || 1)); },
+  icicles(c, s) { for (const q of s.ic) icicle(c, q); },
+  breaker(c, s) { icicle(c, s.c); },
+  pendulums(c, s, _w, T) {
     c.strokeStyle = COL.ink; c.lineWidth = 3;
-    for (const q of w.s.pd) { if (q.bx == null) continue; c.beginPath(); c.moveTo(q.x, 64); c.lineTo(q.bx, q.by); c.stroke(); drawSaw(c, q.bx, q.by, 28, T * 3, 10); }
+    for (const q of s.pd) { c.beginPath(); c.moveTo(q.x, 64); c.lineTo(q.bx, q.by); c.stroke(); drawSaw(c, q.bx, q.by, 28, T * 3, 10); }
   },
-  slabs(c, w) {
-    const s = w.s; c.fillStyle = COL.ink; c.fillRect(0, 44, W, s.cy - 24);
+  crusher(c, s) {
+    c.fillStyle = COL.ink; c.fillRect(0, 44, W, s.cy - 24);
     if (s.crush) for (let x = 0; x < W; x += 22) { c.beginPath(); c.moveTo(x, s.cy + 20); c.lineTo(x + 11, s.cy + 36); c.lineTo(x + 22, s.cy + 20); c.fill(); }
     for (const q of s.pl) { if (q.st === 3) continue; const j = q.st === 1 ? (Math.random() - .5) * 4 : 0; c.fillRect(q.x + j, q.y, 80, 20); }
   },
-  wait(c, w) {
-    if (w.s.done) return;
+  walker(c, s) {
+    if (s.done) return;
     c.save(); c.globalAlpha = .1; c.fillStyle = COL.ink; c.font = '180px ' + DISP; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(String(Math.max(0, Math.ceil(10 - w.s.wait))), W / 2, 250); c.restore();
+    c.fillText(String(Math.max(0, Math.ceil(10 - s.wait))), W / 2, 250); c.restore();
   },
-  rhythm(c, w) {
-    const s = w.s;
+  rhythm(c, s) {
     if (s.pulse > 0) { c.fillStyle = COL.accent; c.globalAlpha = s.pulse * .6; c.fillRect(0, 0, W, FLOOR); c.globalAlpha = 1; }
     for (const q of s.st) { c.fillStyle = q.warn ? COL.accent : COL.ink; teeth(c, q.x, q.w, () => q.hh); }
   },
-  ball(c, w) { const b = w.s.b; if (b.st !== 'in' && b.st !== 'wait') drawSaw(c, b.x, b.y, 34, b.rot, 14); },
-  lifts(c, w) {
-    if (w.s.back) return;
+  ball(c, s, _w, T) { if (s.st !== 'in' && s.st !== 'wait') drawSaw(c, s.x, s.y, 34, s.st === 'out' ? -T * 7 : T * 7, 14); },
+  lifts(c, s) {
+    if (s.back) return;
     c.strokeStyle = COL.ink; c.lineWidth = 2; c.beginPath(); c.moveTo(545, 64); c.lineTo(545, 330); c.stroke();
     c.fillStyle = COL.white; c.fillRect(490, 330, 110, 44); c.strokeRect(490, 330, 110, 44);
     c.fillStyle = COL.ink; c.font = '600 13px ' + MONO; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText('УШЁЛ', 545, 345); c.fillText('НА ОБЕД', 545, 361); c.textAlign = 'left';
   },
 };
-const top: Record<string, (c: CanvasRenderingContext2D, w: World, T: number) => void> = {
-  saw(c, w) { if (w.s.b.on && !w.s.go) bubbleAt(c, 'Проходите, я подожду.', w.s.b.x, FLOOR - 40); },
-  ice(c, w, T) {
-    if (!w.s.hole) return;
+const top: Record<string, Paint> = {
+  saw(c, s) { if (s.on && s.v === 0 && s.min === undefined) bubbleAt(c, 'Проходите, я подожду.', s.x, FLOOR - 40); },
+  breaker(c, s, _w, T) {
+    if (!s.hole) return;
     c.fillStyle = COL.accent; c.font = '28px ' + DISP; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText('↓', 898, 440 + Math.sin(T * 6) * 4); c.textAlign = 'left';
   },
-  draw(c, w) {
+  drawn(c, s, w) {
     c.save(); c.strokeStyle = COL.accent; c.lineWidth = 4; c.lineCap = 'round'; c.lineJoin = 'round';
-    for (const st of w.s.strokes as [number, number][][]) { c.beginPath(); st.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); }
+    for (const st of s.strokes as [number, number][][]) { c.beginPath(); st.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); }
     const d = w.door;
     if (d) { c.globalAlpha = .14; c.fillStyle = COL.accent; c.fillRect(d.x, d.y, d.w, d.h); c.globalAlpha = 1; c.beginPath(); c.arc(d.x + d.w - 8, d.y + d.h / 2, 4, 0, 7); c.fill(); }
     c.restore();
   },
-  ball(c, w) { if (w.s.b.st === 'in') bubbleAt(c, 'Занято!', 897, FLOOR - 60); },
+  ball(c, s) { if (s.st === 'in') bubbleAt(c, 'Занято!', 897, FLOOR - 60); },
 };
+function icicle(c: CanvasRenderingContext2D, q: { x: number; y: number; st: number }) {
+  if (q.st === 3) return;
+  const j = q.st === 1 ? (Math.random() - .5) * 4 : 0;
+  c.fillStyle = COL.ink; c.beginPath(); c.moveTo(q.x + j, q.y); c.lineTo(q.x + 22 + j, q.y); c.lineTo(q.x + 11 + j, q.y + 34); c.fill();
+}
+const paint = (layer: Record<string, Paint>, c: CanvasRenderingContext2D, w: World, T: number) =>
+  Object.values(w.c).forEach(s => layer[s.kind]?.(c, s, w, T));
 
 function drawAvatar(c: CanvasRenderingContext2D, a: Avatar, gdir: number, T: number) {
   c.globalAlpha = a.me ? 1 : .88;
@@ -126,23 +129,23 @@ export function draw(c: CanvasRenderingContext2D, v: View) {
   const { w, T } = v, L = LEVELS[w.lvl];
   c.fillStyle = COL.paper; c.fillRect(0, 0, W, H);
   c.fillStyle = COL.faint; for (let x = 24; x < W; x += 48) for (let y = 24; y < FLOOR; y += 48) c.fillRect(x - 1, y - 1, 2, 2);
-  back[L.id]?.(c, w, T);
-  const solids = allSolids(w);
+  paint(back, c, w, T);
+  const solids = solidsOf(w);
   for (const s of solids) {
     if (s.floor) continue;
     if (s.text) { c.font = TXT; c.fillStyle = s.color === 'mute' ? COL.mute : s.color === 'accent' ? COL.accent : COL.ink; c.textBaseline = 'top'; c.textAlign = 'left'; c.fillText(s.text, s.x, s.y); }
     else { c.fillStyle = COL.ink; c.fillRect(s.x, s.y, s.w, s.h); }
   }
   c.fillStyle = COL.ink;
-  const flat: number[] = L.cardboard ? w.s.flat ?? [] : [];
+  const flat: ReadonlyArray<number> = (Object.values(w.c).find(s => s.kind === 'cardboard') as { flat?: number[] } | undefined)?.flat ?? [];
   for (const sp of w.spikes) teeth(c, sp.x, sp.w, i => flat.includes(i) ? 5 : 22);
   if (w.door) drawDoor(c, w.door, T);
   // floor: static segments and tiles; shaking tiles jitter, falling ones keep falling
   c.fillStyle = COL.ink;
   for (const s of solids) if (s.floor) { const j = s.st === 1 ? (Math.random() - .5) * 4 : 0; c.fillRect(s.x + j, s.y + (s.st === 1 ? Math.random() * 3 : 0), s.w, s.h); }
-  if (w.s.tiles) for (const t of w.s.tiles as Solid[]) if (t.st === 2) c.fillRect(t.x, t.y, t.w, t.h);
+  for (const s of Object.values(w.c)) if (s.kind === 'tiles') for (const t of (s as unknown as { tiles: Solid[] }).tiles) if (t.st === 2) c.fillRect(t.x, t.y, t.w, t.h);
   c.fillStyle = COL.paper; for (const s of solids) if (s.seam && s.x > 0) c.fillRect(s.x - 1, s.y, 2, 9);
-  top[L.id]?.(c, w, T);
+  paint(top, c, w, T);
   if (v.stroke) {
     c.save(); c.strokeStyle = COL.accent; c.globalAlpha = .6; c.lineWidth = 4; c.lineCap = 'round'; c.beginPath();
     v.stroke.forEach((q, i) => i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)); c.stroke(); c.restore();
